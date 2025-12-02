@@ -35,6 +35,11 @@ GAME_HEADERS = {**HEADERS, 'game-alias': 'nikke'}
 # 创建 session
 session = requests.Session()
 
+# 涉及到的正则模式
+CONTENT_ID_PATTERN = re.compile(r'/nikke/tj/(\d+)\.html')
+QUESTION_PATTERN = re.compile(r'^问题\d+')
+DOTS_PATTERN = re.compile(r'[\.·]{3,}')
+
 
 def load_existing_dialogue():
     """加载现有的对话数据"""
@@ -97,7 +102,7 @@ def get_nikke_list(limit=None):
 
             # 从 href 中提取 content_id
             # 格式: /nikke/tj/684090.html
-            match = re.search(r'/nikke/tj/(\d+)\.html', href)
+            match = CONTENT_ID_PATTERN.search(href)
             if match:
                 content_id = match.group(1)
                 nikke_list.append({'name': title, 'content_id': content_id})
@@ -164,7 +169,7 @@ def get_nikke_dialogue(content_id, nikke_name):
                 nikke_name = value
 
             # 检查是否是问题（以"问题"加数字开头）
-            elif re.match(r'^问题\d+', label):
+            elif QUESTION_PATTERN.match(label):
                 # 如果有之前的问题，先保存
                 if current_question and answer_true and answer_false:
                     dialogues.append(
@@ -244,13 +249,7 @@ def clean_text(text):
         count = len(dots) // 3
         return '…' * count
 
-    def repl_middot(match):
-        dots = match.group(0)
-        count = len(dots) // 3
-        return '…' * count
-
-    text = re.sub(r'\.{3,}', repl_dot, text)
-    text = re.sub(r'·{3,}', repl_middot, text)
+    text = DOTS_PATTERN.sub(repl_dot, text)
 
     # 删除 AccountDataNickName
     text = text.replace('{AccountData.NickName}', '').replace("'", '')
