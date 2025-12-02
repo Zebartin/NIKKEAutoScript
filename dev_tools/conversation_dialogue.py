@@ -118,6 +118,13 @@ def get_nikke_list(limit=None):
         return []
 
 
+def parse_label_value(group: list):
+    """解析 label 和 value，防止缺失导致的异常"""
+    label = group[0].get("value", "").strip() if len(group) > 0 else ""
+    value = group[1].get("value", "").strip() if len(group) > 1 else ""
+    return label, value
+
+
 def get_nikke_dialogue(content_id, nikke_name):
     """
     获取单个 NIKKE 角色的对话数据
@@ -144,63 +151,54 @@ def get_nikke_dialogue(content_id, nikke_name):
 
         # 解析 content_json
         content_json = json.loads(data['data']['content_json'])
+        base_data = content_json.get('baseData', [])
 
-        if 'baseData' not in content_json:
+        if not base_data:
             print(f'  警告: {nikke_name} 没有 baseData')
             return nikke_name, None, 'error'
 
-        # 提取对话数据
-        dialogues = []
-        current_question = None
-        answer_true = None
-        answer_false = None
+        base_data = [x for x in base_data if x and len(x) >= 2]
 
-        for item in content_json['baseData']:
-            if not item or len(item) < 2:
+        # 检查名称是否相同
+        index = next(
+            i for i, d in enumerate(base_data) if d[0].get('value', '') == '角色名称'
+        )
+        label, value = parse_label_value(base_data[index])
+        if label == '角色名称' and value != nikke_name:
+            print(f'  警告: 角色名称不匹配，使用 {value} 覆盖 {nikke_name}')
+            nikke_name = value
+
+        # 从index开始，每3个为一组进行解析，提取对话数据
+        dialogues = []
+        index = next(
+            i
+            for i, d in enumerate(base_data[index:])
+            if d[0].get('value', '').startswith('问题')
+        )
+        while 1:
+            label, value = parse_label_value(base_data[index])
+            if not QUESTION_PATTERN.match(label):
+                break
+
+            question = clean_text(value)
+            for j in (index + 1, index + 2):
+                label, value = parse_label_value(base_data[j])
+                if label == '100好感度':
+                    answer_false = clean_text(value)
+                elif label == '120好感度':
+                    answer_true = clean_text(value)
+            index += 3
+
+            if not (question or answer_false or answer_true):
                 continue
 
-            label = item[0].get('value', '').strip()
-            value = item[1].get('value', '').strip()
-
-            # 检查名称是否相同
-            if label == '角色名称' and value != nikke_name:
-                print(f'  警告: 角色名称不匹配，使用 {value} 覆盖 {nikke_name}')
-                nikke_name = value
-
-            # 检查是否是问题（以"问题"加数字开头）
-            elif QUESTION_PATTERN.match(label):
-                # 如果有之前的问题，先保存
-                if current_question and answer_true and answer_false:
-                    dialogues.append(
-                        {
-                            'question': current_question,
-                            'answer': {'false': answer_false, 'true': answer_true},
-                        }
-                    )
-
-                # 开始新问题
-                current_question = clean_text(value)
-                answer_true = None
-                answer_false = None
-
-            # 检查是否是答案 - false 在前，true 在后
-            elif label == '100好感度':
-                answer_false = clean_text(value)
-
-            elif label == '120好感度':
-                answer_true = clean_text(value)
-
-        # 保存最后一个问题
-        if current_question and answer_true and answer_false:
-            dialogues.append(
-                {
-                    'question': current_question,
-                    'answer': {
-                        'false': answer_false,  # false 在前
-                        'true': answer_true,  # true 在后
-                    },
+            dialogues.append({
+                'question': question,
+                'answer': {
+                    'false': answer_false,
+                    'true': answer_true
                 }
-            )
+            })
 
         # 验证数据完整性
         dialogue_count = len(dialogues)
