@@ -326,7 +326,8 @@ def main():
     added_names = []  # 新增的角色名称
     updated_names = []  # 更新的角色名称
 
-    for i, nikke in enumerate(nikke_list, 1):
+    # 倒序，按实装日期从老到新处理
+    for i, nikke in enumerate(reversed(nikke_list), 1):
         nikke_name = nikke['name']
         content_id = nikke['content_id']
 
