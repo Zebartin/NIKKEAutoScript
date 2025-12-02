@@ -9,7 +9,6 @@ import argparse
 import json
 import re
 import time
-from collections import OrderedDict
 from pathlib import Path
 
 import requests
@@ -44,10 +43,10 @@ DOTS_PATTERN = re.compile(r'[\.·]{3,}')
 def load_existing_dialogue():
     """加载现有的对话数据"""
     if DIALOGUE_JSON_PATH.exists():
-        with open(DIALOGUE_JSON_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f, object_pairs_hook=OrderedDict)
+        with DIALOGUE_JSON_PATH.open('r', encoding='utf-8') as f:
+            data = json.load(f)
             return data
-    return OrderedDict()
+    return dict()
 
 
 def save_dialogue(dialogue_data):
@@ -56,8 +55,8 @@ def save_dialogue(dialogue_data):
     DIALOGUE_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     # 保存 JSON（带缩进，方便阅读）
-    # 注意：dialogue_data 已经是 OrderedDict，会保持插入顺序
-    with open(DIALOGUE_JSON_PATH, 'w', encoding='utf-8') as f:
+    # python 3.10中，dict保证有序
+    with DIALOGUE_JSON_PATH.open('w', encoding='utf-8') as f:
         json.dump(dialogue_data, f, ensure_ascii=False, indent=2)
 
     print(f'✓ 数据已保存到 {DIALOGUE_JSON_PATH}')
@@ -374,11 +373,11 @@ def main():
 
         # 更新数据 - 新角色追加到最前面
         if is_new:
-            # 新角色：创建新的 OrderedDict，将新角色放在最前面
-            new_dict = OrderedDict()
-            new_dict[nikke_name] = new_dialogues
-            new_dict.update(existing_dialogue)
-            existing_dialogue = new_dict
+            # python 3.10中，dict保证有序
+            existing_dialogue = {
+                nikke_name: new_dialogues,
+                **existing_dialogue
+            }
             added_names.append(nikke_name)
         else:
             # 已存在角色：直接更新
@@ -395,7 +394,7 @@ def main():
         # 保存更新的角色名称到文件，供 GitHub Actions 使用
         update_info_path = BASE_DIR / '.github' / 'updated_nikke.txt'
         update_info_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(update_info_path, 'w', encoding='utf-8') as f:
+        with update_info_path.open('w', encoding='utf-8') as f:
             if added_names:
                 f.write(f'新增：{", ".join(added_names)}\n')
             if updated_names:
